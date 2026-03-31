@@ -159,15 +159,15 @@ Example of GWAS catalog /extracted from lei's slides
   - Compute pairwise LD ($r^2$) between the lead SNP and other SNPs.
   - Keep SNPs with LD above a threshold (e.g. $r^2 > 0.6$) as **candidate causal SNPs**.
 
+<!--
 - **LD clustering :**
   - Hierarchical clustering of all SNPs in a region based on their pairwise $r^2$ to create clusters.
-  
-  
+--> 
 ---------  
   
 # Heuristic Fine-mapping: LD-based Candidate Selection
 
-- Visualization tools such as **LocusZoom** or **Haploview**:
+- Visualization tools such as **[LocusZoom](http://locuszoom.org/)** or **[Haploview](https://www.broadinstitute.org/haploview/haploview)**:
     - Combining the GWAS lead SNP with SNPs in the same LD block to select potential causal SNPs. 
 
   ![bg right:50% w:500](./images/locuszoom.png)
@@ -205,13 +205,68 @@ Example of GWAS catalog /extracted from lei's slides
 
 # Heuristic Fine-mapping: Conditional Analysis
 
-- Implemented in tools such as:
-  - **PLINK** (e.g. `--condition`, `--condition-list`, stepwise conditional analysis)
-  - **GCTA-COJO** (conditional and joint multiple-SNP analysis)
+- Implemented in **PLINK2** :
+   - e.g. `--condition`, `--condition-list`  
   ![bg right:50% w:600](./images/conditional_analysis.png)
   
   
 --------
+
+ # *Bayesian Models for Fine-mapping
+ 
+- Bayesian fine-mapping provides an alternative framework to identify causal variants at loci discovered in GWAS.
+- These methods are typically applied locally, analyzing one genomic locus at a time.
+- Causal variants are prioritized using the **Posterior Inclusion Probability (PIP)**:
+  $$
+  P(~\text{SNP i is causal}~∣Z)
+  $$
+- PIP quantifies the probability that a SNP is truly causal given the observed data.
+- SNPs with higher PIP are stronger candidates for causality.
+----
+
+# *Bayesian Fine-mapping Schematic
+
+
+   ![Sales Figure, w:800](./images/finemap_workflow.png)
+   
+-----
+# *Bayesian Fine-mapping
+
+- Input: **GWAS summary statistics (Z-scores) and LD information** at GWAS locus.
+
+- Smart search strategies are used to efficiently find likely causal SNPs
+  - Shotgun Stochastic Search (SSS) or Iterative Bayesian Stepwise Selection (IBSS)
+  
+- Output: **Posterior inclusion probabilities (PIPs)** for each SNP.
+- Output also includes **credible sets**: groups of genetic variants that are likely to contain the true causal variant(s) with a specified probability.
+
+- A level $\rho$ credible set is defined to be the smallest subset of correlated variants (with correlation > $r$ ) that has probability $\rho$ or greater of containing at least one causal SNP variant.
+
+------
+
+# *Fine-mapping Example 1
+
+
+   ![Sales Figure, w:800](./images/CARMA1.png)
+
+
+------
+
+# *Fine-mapping Example 2
+
+   ![Sales Figure, w:1000](./images/CARMA2.png)
+
+------
+
+# *Practical Tools
+
+- Widely used Bayesian fine-mapping methods: CAVIAR (2014), FINEMAP (2016), SuSiE (2019), CARMA (2023).
+- Tutorial (SuSiE in R): https://stephenslab.github.io/susieR/articles/finemapping_summary_statistics.html 
+
+
+-------
+
+<!--
 
 # Fine-mapping: Penalized Regression Models
 
@@ -241,6 +296,7 @@ Example of GWAS catalog /extracted from lei's slides
 
 ---
 
+
 # Ingredients of Bayesian inference
 
 - We have an unknown quantity $\theta$:
@@ -258,64 +314,64 @@ Example of GWAS catalog /extracted from lei's slides
   \;\propto\; p(\text{data} \mid \theta)\, p(\theta).
   $$
 
----
-
-# Bayesian fine-mapping: big picture
-
-- Same goal as penalized regression: decide **which SNPs have non-zero effects**.
-- Key difference: Bayesian methods assign **probabilities to many models**, not just pick one best model.
-- We specify a **prior** over which SNPs are causal (e.g. all equally likely, or a fixed expected number per region) and update it with the data using Bayes’ rule.
-- Output:
-  - **Posterior probabilities** for different models (combinations of causal SNPs),
-  - **Posterior inclusion probabilities (PIPs)** for each SNP.
-- This gives a clear **probabilistic interpretation** of fine-mapping results.
-
 -----
 
 # Bayesian Fine-mapping
 
-- For $m$ SNPs, define an indicator vector $c = (c_1,\dots,c_m)$:
+- Our goal: decide **which SNPs have non-zero effects**.
+
+- For $m$ SNPs, define an indicator vector $C = (c_1,\dots,c_m)$:
   - $c_j = 1$ if SNP $j$ is causal, $c_j = 0$ otherwise.
   - There are $2^m$ possible $c$ vectors → $2^m$ possible causal models.
+
+- We specify a **prior** over which SNPs are causal (e.g. all equally likely, or a fixed expected number per region).
   
-- Using Bayes' formula, for a specified model $M_{\mathrm{c}}$:
+- Using Bayes' formula, for a specified model $C = c$ :
 
 $$
-P(M_{c} \mid D)=\frac{P(D \mid M_{c}) \cdot P(M_{c})}{P(D)}
+P(C=c \mid D)=\frac{P(D \mid C=c) \cdot P(C=c)}{P(D)}
 $$
 
-- The posterior probabilities for different models can be used to determine the posterior probability of including each SNP in any of the models (PIP).
-
+- $P(D \mid C=c): (Z_1,Z_2,...Z_m) \sim N(0,f(\Sigma,C))$. 
 
 ------
-  
+
 # Posterior Inclusion Probability (PIP)
+
+- The posterior probabilities for different models can be used to determine the posterior probability of including SNP $j$ as causal.
 
 - PIP for SNP $i$: sum of posteriors over all models that include SNP $i$ as causal.
 
-$$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
+$$P I P_i=\sum_c I(c_i =1 ) P(C=c \mid D)$$
 
-- Use PIP ranks to prioritize putative causal variants.
-
-- Caution in high-LD regions: probability spreads across correlated SNPs.
-
-- Posterior expected number of causal SNPs $\approx \Sigma PIP_{i}$ over the region.
-
--------
+- Rank SNPs by PIP to prioritize likely causal variants
+  - Higher PIP $\rightarrow$ stronger evidence of causality
 
 
-# Credible Sets
-
-- "A level $\rho$ credible set is defined to be a subset of correlated variables (with correlation within the set greater than some threshold $r$ ) that has probability $\rho$ or greater of containing at least one effect variable (i.e. causal SNP)."
-
-- In short, it defines a set of variants likely to contain the causal SNP(s).
-
-- Procedure:
-  1. Rank SNPs by PIP (largest $\rightarrow$ smallest).
-  2. Accumulate PIPs until reaching coverage a (e.g., $95 \%$ or $99 \%$ ).
-  3. Selected variants form the a credible set.
+--------
   
-#### Question: Are credible sets unique for a given level $\rho$?
+# Bayesian Fine-mapping
+
+- Input: **GWAS summary statistics (Z-scores) and LD information** at GWAS locus.
+
+- Efficient search algorithms are used to explore the space of causal configurations
+  - Shotgun Stochastic Search (SSS) or Iterative Bayesian Stepwise Selection (IBSS)
+  
+- Output: **Posterior inclusion probabilities (PIPs)** for each SNP.
+- Output also includes **credible sets**: groups of genetic variants that are likely to contain the true causal variant(s) with a specified probability.
+
+- A level $\rho$ credible set is defined to be the smallest subset of correlated variants (with correlation > $r$ ) that has probability $\rho$ or greater of containing at least one causal SNP variant.
+
+------  
+
+# Practical Workflow \& Tools
+
+- Steps:
+  - Define regions (around lead SNPs; PLINK --clump for sentinel signals).
+  - Run Bayesian fine-mapping to obtain PIPs \& credible sets.
+- Tools: CAVIAR, FINEMAP, SuSiE, CARMA
+- Caution in high-LD regions: probability spreads across correlated SNPs.
+- Posterior expected number of causal SNPs $\approx \Sigma PIP_{i}$ over the region.
 
 --------
 
@@ -327,7 +383,7 @@ $$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
   ![Sales Figure, w:750](./images/susie.png)
 
 -------
-<!--
+
 # Functional Annotation in Fine-Mapping
 
 - Bayesian models can incorporate additional knowledge (e.g. functional annotation) in terms of prior to help disentangle highly correlated variables.
@@ -343,18 +399,6 @@ $$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
   
 ------
 
---->
-
-# Practical Workflow \& Tools
-
-- Typical inputs: GWAS summary statistics, ancestry-matched LD reference panels, and (optionally) functional annotations.
-- Steps:
-  - Define regions (around lead SNPs; PLINK --clump for sentinel signals).
-  - Run Bayesian fine-mapping to obtain PIPs \& credible sets.
-  - Outputs to show: top-PIP variants, credible set sizes, locus zoom-style plots.
-- Tools: CAVIAR, FINEMAP, SuSiE, CARMA
-
---------
 
 # Hypothetical Examples
 
@@ -365,7 +409,6 @@ $$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
 - The light grey boxes represent the regions selected by fine-mapping.
 
 ![bg right:35% w:300](./images/fine_map_all.png)
-
 
 -------
 
@@ -381,9 +424,9 @@ $$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
 
 - Leverage high-dimensional functional annotations to improve inference.
 
-<!--
+---------
+
 - ##### We’ll dive deeper into fine-mapping strategies for these scenarios in the Advanced Computational Genomics course!
--->
 
 ---------
 
@@ -402,6 +445,7 @@ $$P I P_i=\sum_c I(~\text{model containing SNP i as causal}~) P(M_{c} \mid D)$$
   - Produces PIPs and credible sets → probabilistic interpretation.
 
 --------
+-->
 
 # Functional Follow-up
 
