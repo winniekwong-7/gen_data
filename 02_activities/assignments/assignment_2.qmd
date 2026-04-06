@@ -5,6 +5,14 @@ format: html
 
 You will need **PLINK2** installed and available in your PATH. Please follow the OS-specific setup guide in [`SETUP.md`](../../SETUP.md). The dataset for this assignment consists of the following binary PLINK files: `gwa.A2.bed`, `gwa.A2.bim`, `gwa.A2.fam` , available at the following Google Drive link: <https://drive.google.com/drive/folders/1rHoy3z52Yyj985ukjjtLhfIBxchpyYtZ?usp=drive_link>. Please download all three files and save them in `02_activities/data/`.
 
+```{r setup, include=FALSE}
+# Input files are expected in ./02_activities/data/.
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath("../../"))
+library(data.table)
+library(qqman)
+```
+
 #### Question 1: Data inspection
 
 Before you run any models, first get familiar with the dataset. You may find `data.table::fread()` in R helpful for reading `.bim` and `.fam` files.
@@ -12,15 +20,20 @@ Before you run any models, first get familiar with the dataset. You may find `da
 (i) Read the `.fam` file. How many samples does the dataset contain?
 
 ```{r}
-# Your code here...
+gwaA2_fam <- data.table::fread("/Users/winniekwong/Desktop/gen_data/02_activities/data/gwa.A2.fam")
+nrow(gwaA2_fam)
 ```
+
+There are 4000 samples in this dataset.
 
 (ii) Read the `.bim` file. How many SNPs does the dataset contain?
 
 ```{r}
-# Your code here...
+gwaA2_bim <- data.table::fread("/Users/winniekwong/Desktop/gen_data/02_activities/data/gwa.A2.bim")
+nrow(gwaA2_bim)
 ```
 
+There are 306102 SNPs in this dataset.
 
 #### Question 2: Quality control (QC)
 
@@ -29,7 +42,7 @@ Now we will perform QC using PLINK2 for the genotype files in `gwa.A2`.
 (i) Using PLINK2 from the command line (bash), perform basic QC with the following filters: MAF ≥ 0.05, SNP missingness (`--geno`) ≤ 0.01, individual missingness (`--mind`) ≤ 0.10, and HWE p-value ≥ 0.00005, and output the QC’ed dataset as `gwa.qc.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.A2 --maf 0.05 --geno 0.01 --mind 0.1 --hwe 0.00005 --make-bed --out ./02_activities/data/gwa.qc.A2
 ```
 
 #### Question 3: Relatedness
@@ -39,19 +52,23 @@ In this question, you will use **PLINK2’s built-in KING-robust kinship** (`--k
 i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters: `--indep-pairwise 500 50 0.05`, and then generate a new dataset containing only the pruned SNPs.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --indep-pairwise 500 50 0.05 --out ./02_activities/data/gwa.qc.A2
+```
+
+```{bash}
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --extract ./02_activities/data/gwa.qc.A2.prune.in --make-bed --out ./02_activities/data/gwa.qc.A2_pruned
 ```
 
 (ii) Use PLINK2 on the LD-pruned dataset to identify a set of unrelated individuals up to (approximately) 2nd-degree relatives (use a kinship cutoff of 0.0884).
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2_pruned --king-cutoff 0.0884 --out ./02_activities/data/gwa_qc_A2
 ```
 
 (iii) Using the unrelated individual list from part (ii), create a dataset containing only unrelated individuals and name it `gwa.qc_unrelated.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --keep ./02_activities/data/gwa_qc_A2.king.cutoff.in.id --make-bed --out ./02_activities/data/gwa.qc_unrelated.A2
 ```
 
 #### Question 4: principal component analysis (PCA)
@@ -61,7 +78,11 @@ i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters
     (Hint: Refer to the PCA section in the GWAS Tutorial II. You should use a `*.prune.in` file to select a set of independent SNPs before performing PCA.)
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc_unrelated.A2 --extract ./02_activities/data/gwa.qc.A2.prune.in --make-bed --out ./02_activities/data/gwa.qc_unrelated_pruned.A2
+```
+
+```{bash}
+plink2 --bfile ./02_activities/data/gwa.qc_unrelated_pruned.A2 --pca 20 --out ./02_activities/data/gwa_unrel_PCA.A2
 ```
 
 #### Question 5: GWAS analyses
@@ -77,19 +98,37 @@ Assume that:
 (i) Using PLINK2, run a linear regression GWAS using `gwa.qc_unrelated.A2` as the input dataset. Adjust for PCs 1–3 as covariates.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc_unrelated.A2 --ci 0.95 --linear --covar ./02_activities/data/gwa_unrel_PCA.A2.eigenvec --covar-name PC1,PC2,PC3 --adjust --out ./02_activities/data/gwa.qc.A2_assoc
 ```
 
 (ii) Create a Manhattan plot of the GWAS results.
 
 ```{r}
-# Your code here...
+A2_assoc <- data.table::fread("/Users/winniekwong/Desktop/gen_data/02_activities/data/gwa.qc.A2_assoc.PHENO1.glm.linear")
+A2_assoc_adjusted <- data.table::fread("/Users/winniekwong/Desktop/gen_data/02_activities/data/gwa.qc.A2_assoc.PHENO1.glm.linear.adjusted")
+A2_assoc_add <- A2_assoc[TEST == "ADD"]
+setnames(A2_assoc_add, c("#CHROM","POS","ID"), c("CHR","BP","SNP"))
+png("/Users/winniekwong/Desktop/gen_data/02_activities/data/manhattan_plot_A2.png", width = 1200, height = 800, res = 150)
+manhattan(A2_assoc_add,
+          chr = "CHR",
+          bp  = "BP",
+         snp = "SNP",
+          p   = "P",
+          xlab = "",
+          ylab = "",
+          suggestiveline = FALSE,
+          cex.axis = 1.5,
+          col = c("lightblue", "lightslateblue"),
+          annotatePval=5e-5) 
+dev.off()
 ```
 
 (iii) Create a QQ plot of the GWAS p-values.
 
 ```{r}
-# Your code here...
+png("/Users/winniekwong/Desktop/gen_data/02_activities/data/QQ_plot_A2.png", width = 1200, height = 800, res = 150)
+qq(A2_assoc_add$P, main = "Q-Q plot of GWAS p-values")
+dev.off()
 ```
 
 ### Criteria
